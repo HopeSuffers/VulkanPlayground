@@ -113,9 +113,9 @@ private:
         glfwInit();
 
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+        window = glfwCreateWindow(WIDTH, HEIGHT, "VulkanPlayground", nullptr, nullptr);
     }
 
     void initVulkan() {
@@ -208,7 +208,6 @@ private:
         createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
         createInfo.ppEnabledExtensionNames = extensions.data();
 
-        // Add the VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR flag
         createInfo.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 
         VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
@@ -662,8 +661,6 @@ private:
                 throw std::runtime_error("failed to record command buffer!");
             }
         }
-
-
     }
 
     void drawFrame() {
