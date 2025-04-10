@@ -20,3 +20,15 @@ target_include_directories(VulkanPlayground PRIVATE ${CMAKE_SOURCE_DIR}/lib/tiny
 
 # Link libraries to the executable target
 target_link_libraries(VulkanPlayground glfw ${GLFW_LIBRARIES} Vulkan::Vulkan glm::glm tinyobjloader)
+
+# Define resource directories
+set(SHADERS_DIR ${CMAKE_SOURCE_DIR}/shaders)
+set(TEXTURES_DIR ${CMAKE_SOURCE_DIR}/textures)
+set(MODELS_DIR  ${CMAKE_SOURCE_DIR}/models)
+
+# Copy resources to the output directory after build
+add_custom_command(TARGET VulkanPlayground POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${SHADERS_DIR} $<TARGET_FILE_DIR:VulkanPlayground>/shaders
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${TEXTURES_DIR} $<TARGET_FILE_DIR:VulkanPlayground>/textures
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${MODELS_DIR}  $<TARGET_FILE_DIR:VulkanPlayground>/models
+)
