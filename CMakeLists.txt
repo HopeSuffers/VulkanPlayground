@@ -10,13 +10,14 @@ add_executable(VulkanPlayground main.cpp)
 find_package(Vulkan REQUIRED)
 
 # Add GLFW and GLM subdirectories
-add_subdirectory(lib/glfw)
+add_subdirectory(lib/external/glfw)
 SET(GLM_TEST_ENABLE OFF CACHE BOOL "GLM Build unit tests")
-add_subdirectory(lib/glm EXCLUDE_FROM_ALL)
-add_subdirectory(lib/tinyobjloader)
+add_subdirectory(lib/external/glm EXCLUDE_FROM_ALL)
+add_subdirectory(lib/external/tinyobjloader)
+add_subdirectory(lib/external/stb)
 
 # Include directories for tinyobjloader
-target_include_directories(VulkanPlayground PRIVATE ${CMAKE_SOURCE_DIR}/lib/tinyobjloader)
+target_include_directories(VulkanPlayground PRIVATE ${CMAKE_SOURCE_DIR}/lib/external/tinyobjloader)
 
 # Link libraries to the executable target
 target_link_libraries(VulkanPlayground glfw ${GLFW_LIBRARIES} Vulkan::Vulkan glm::glm tinyobjloader)
