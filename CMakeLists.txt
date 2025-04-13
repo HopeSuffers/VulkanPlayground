@@ -14,7 +14,6 @@ add_subdirectory(lib/external/glfw)
 SET(GLM_TEST_ENABLE OFF CACHE BOOL "GLM Build unit tests")
 add_subdirectory(lib/external/glm EXCLUDE_FROM_ALL)
 add_subdirectory(lib/external/tinyobjloader)
-add_subdirectory(lib/external/stb)
 
 # Include directories for tinyobjloader
 target_include_directories(VulkanPlayground PRIVATE ${CMAKE_SOURCE_DIR}/lib/external/tinyobjloader)
