@@ -1,4 +1,13 @@
-#!/bin/bash
+unameOut="$(uname -s)"
+case "${unameOut}" in
+    Linux)     machine=x86_64;;
+    Darwin)    machine=macOS;;
+    *)          machine="UNKNOWN:${unameOut}"
+esac
+echo ${machine}
 
-/Users/hopesuffers/VulkanSDK/1.3.283.0/macOS/bin/glslc shader.vert -o vert.spv
-/Users/hopesuffers/VulkanSDK/1.3.283.0/macOS/bin/glslc shader.frag -o frag.spv
+#!/bin/bash
+~/VulkanSDK/1.4.309.0/${machine}/bin/glslc shader.vert -o vert.spv
+echo "compiled vertex shader"
+~/VulkanSDK/1.4.309.0/${machine}/bin/glslc shader.frag -o frag.spv
+echo "compiled fragment shader"

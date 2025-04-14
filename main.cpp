@@ -32,7 +32,7 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-const std::string MODEL_PATH = "models/viking_room.obj";
+const std::string MODEL_PATH = "models/CornellBox-Water.obj";
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
@@ -82,10 +82,17 @@ struct SwapChainSupportDetails {
     std::vector<VkPresentModeKHR> presentModes;
 };
 
+struct Material {
+    glm::vec3 diffuse;
+    glm::vec3 specular;
+    float shininess;
+};
+
 struct Vertex {
     glm::vec3 pos;
     glm::vec3 color;
     glm::vec2 texCoord;
+    int materialIndex;
 
     static VkVertexInputBindingDescription getBindingDescription() {
         VkVertexInputBindingDescription bindingDescription{};
@@ -96,8 +103,8 @@ struct Vertex {
         return bindingDescription;
     }
 
-    static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
-        std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+    static std::array<VkVertexInputAttributeDescription, 4> getAttributeDescriptions() {
+        std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions{};
 
         attributeDescriptions[0].binding = 0;
         attributeDescriptions[0].location = 0;
@@ -113,6 +120,11 @@ struct Vertex {
         attributeDescriptions[2].location = 2;
         attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
         attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+
+        attributeDescriptions[3].binding = 0;
+        attributeDescriptions[3].location = 3;
+        attributeDescriptions[3].format = VK_FORMAT_R32_SINT,
+        attributeDescriptions[3].offset = offsetof(Vertex, materialIndex);
 
         return attributeDescriptions;
     }
@@ -187,6 +199,9 @@ private:
     VkImageView textureImageView;
     VkSampler textureSampler;
 
+
+    std::vector<Material> materials;
+    std::vector<tinyobj::material_t> objMaterials;
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
     VkBuffer vertexBuffer;
@@ -197,6 +212,10 @@ private:
     std::vector<VkBuffer> uniformBuffers;
     std::vector<VkDeviceMemory> uniformBuffersMemory;
     std::vector<void*> uniformBuffersMapped;
+
+    std::vector<VkBuffer> materialsBuffers;
+    std::vector<VkDeviceMemory> materialsBuffersMemory;
+    std::vector<void*> materialsBuffersMapped;
 
     VkDescriptorPool descriptorPool;
     std::vector<VkDescriptorSet> descriptorSets;
@@ -240,13 +259,15 @@ private:
         createColorResources();
         createDepthResources();
         createFramebuffers();
+        loadModel();
+        createMaterials();
         createTextureImage();
         createTextureImageView();
         createTextureSampler();
-        loadModel();
         createVertexBuffer();
         createIndexBuffer();
         createUniformBuffers();
+        createMaterialsBuffers();
         createDescriptorPool();
         createDescriptorSets();
         createCommandBuffers();
@@ -631,7 +652,14 @@ private:
         samplerLayoutBinding.pImmutableSamplers = nullptr;
         samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-        std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding, samplerLayoutBinding};
+        VkDescriptorSetLayoutBinding materialsLayoutBinding{};
+        materialsLayoutBinding.binding = 2;
+        materialsLayoutBinding.descriptorCount = 1;
+        materialsLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        materialsLayoutBinding.pImmutableSamplers = nullptr;
+        materialsLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        std::array<VkDescriptorSetLayoutBinding, 3> bindings = {uboLayoutBinding, samplerLayoutBinding, materialsLayoutBinding};
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -1138,14 +1166,15 @@ private:
     void loadModel() {
         tinyobj::attrib_t attrib;
         std::vector<tinyobj::shape_t> shapes;
-        std::vector<tinyobj::material_t> materials;
         std::string warn, err;
 
-        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
+        if (!tinyobj::LoadObj(&attrib, &shapes, &objMaterials, &warn, &err, MODEL_PATH.c_str(), "textures")) {
             throw std::runtime_error(warn + err);
         }
 
         std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+
+        int materialIndexCounter = 0;
 
         for (const auto& shape : shapes) {
             for (const auto& index : shape.mesh.indices) {
@@ -1169,8 +1198,12 @@ private:
                     vertices.push_back(vertex);
                 }
 
+                vertex.materialIndex = materialIndexCounter;
+
                 indices.push_back(uniqueVertices[vertex]);
             }
+
+            materialIndexCounter++;
         }
     }
 
@@ -1228,12 +1261,38 @@ private:
         }
     }
 
+    void createMaterials() {
+        materials.resize(objMaterials.size());
+
+        for (int i = 0; i < objMaterials.size(); i++) {
+            Material material{};
+            // ToDo Set material to objMaterials
+            materials.push_back(material);
+        }
+    }
+
+    void createMaterialsBuffers() {
+        VkDeviceSize bufferSize = sizeof(Material) * materials.size();
+
+        materialsBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+        materialsBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+        materialsBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, materialsBuffers[i], materialsBuffersMemory[i]);
+
+            vkMapMemory(device, materialsBuffersMemory[i], 0, bufferSize, 0, &materialsBuffersMapped[i]);
+        }
+    }
+
     void createDescriptorPool() {
-        std::array<VkDescriptorPoolSize, 2> poolSizes{};
+        std::array<VkDescriptorPoolSize, 3> poolSizes{};
         poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
         poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
         VkDescriptorPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1270,7 +1329,12 @@ private:
             imageInfo.imageView = textureImageView;
             imageInfo.sampler = textureSampler;
 
-            std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+            VkDescriptorBufferInfo materialBufferInfo{};
+            materialBufferInfo.buffer = materialsBuffers[i];
+            materialBufferInfo.offset = 0;
+            materialBufferInfo.range = sizeof(Material) * materials.size();
+
+            std::array<VkWriteDescriptorSet, 3> descriptorWrites{};
 
             descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             descriptorWrites[0].dstSet = descriptorSets[i];
@@ -1287,6 +1351,14 @@ private:
             descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             descriptorWrites[1].descriptorCount = 1;
             descriptorWrites[1].pImageInfo = &imageInfo;
+
+            descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrites[2].dstSet = descriptorSets[i];
+            descriptorWrites[2].dstBinding = 2;
+            descriptorWrites[2].dstArrayElement = 0;
+            descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descriptorWrites[2].descriptorCount = 1;
+            descriptorWrites[2].pBufferInfo = &materialBufferInfo;
 
             vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
         }
