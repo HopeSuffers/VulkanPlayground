@@ -1,3 +1,4 @@
+#include "glm/fwd.hpp"
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -92,7 +93,7 @@ struct Vertex {
     glm::vec3 pos;
     glm::vec3 color;
     glm::vec2 texCoord;
-    int materialIndex;
+    glm::int32 materialIndex;
 
     static VkVertexInputBindingDescription getBindingDescription() {
         VkVertexInputBindingDescription bindingDescription{};
@@ -1197,12 +1198,12 @@ private:
 
                 vertex.color = {1.0f, 1.0f, 1.0f};
 
+                vertex.materialIndex = materialIndexCounter;
+
                 if (uniqueVertices.count(vertex) == 0) {
                     uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
                     vertices.push_back(vertex);
                 }
-
-                vertex.materialIndex = materialIndexCounter;
 
                 indices.push_back(uniqueVertices[vertex]);
             }
