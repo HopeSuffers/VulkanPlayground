@@ -83,10 +83,8 @@ struct SwapChainSupportDetails {
     std::vector<VkPresentModeKHR> presentModes;
 };
 
-struct Material {
-    glm::vec3 diffuse;
-    glm::vec3 specular;
-    float shininess;
+struct alignas(16) Material {
+    glm::vec4 baseColor;
 };
 
 struct Vertex {
@@ -201,7 +199,8 @@ private:
     VkSampler textureSampler;
 
 
-    std::vector<Material> materials;
+    Material materials[9] = {};
+
     std::vector<tinyobj::material_t> objMaterials;
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
@@ -1267,17 +1266,22 @@ private:
     }
 
     void createMaterials() {
-        materials.resize(objMaterials.size());
+        //materials.resize(objMaterials.size());
 
         for (int i = 0; i < objMaterials.size(); i++) {
             Material material{};
-            // ToDo Set material to objMaterials
-            materials.push_back(material);
+
+            material.baseColor.x = objMaterials[i].diffuse[0];
+            material.baseColor.y = objMaterials[i].diffuse[1];
+            material.baseColor.z = objMaterials[i].diffuse[2];
+            material.baseColor.w = 1;
+
+            materials[i] = material;
         }
     }
 
     void createMaterialsBuffers() {
-        VkDeviceSize bufferSize = sizeof(Material) * materials.size();
+        VkDeviceSize bufferSize = sizeof(materials);
 
         materialsBuffers.resize(MAX_FRAMES_IN_FLIGHT);
         materialsBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
@@ -1287,6 +1291,7 @@ private:
             createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, materialsBuffers[i], materialsBuffersMemory[i]);
 
             vkMapMemory(device, materialsBuffersMemory[i], 0, bufferSize, 0, &materialsBuffersMapped[i]);
+            memcpy(materialsBuffersMapped[i], materials, sizeof(materials));
         }
     }
 
@@ -1337,7 +1342,7 @@ private:
             VkDescriptorBufferInfo materialBufferInfo{};
             materialBufferInfo.buffer = materialsBuffers[i];
             materialBufferInfo.offset = 0;
-            materialBufferInfo.range = sizeof(Material) * materials.size();
+            materialBufferInfo.range = sizeof(materials);
 
             std::array<VkWriteDescriptorSet, 3> descriptorWrites{};
 
