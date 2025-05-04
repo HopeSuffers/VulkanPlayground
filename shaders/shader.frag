@@ -1,5 +1,13 @@
 #version 460
 
+layout(binding = 0) uniform UniformBufferObject {
+    mat4 model;
+    mat4 view;
+    mat4 proj;
+    vec4 lightPos;
+    vec4 viewPos;
+} ubo;
+
 layout(binding = 1) uniform sampler2D texSampler;
 
 struct Material {
@@ -21,46 +29,30 @@ layout(location = 3) flat in int  fragMaterialIndex;
 
 layout(location = 0) out vec4 outColor;
 
-struct LightInfo {
-    vec3 lightPosition;
-    vec3 viewPosition;
-    vec3 ambientColor;
-    vec3 diffuseColor;
-    vec3 specularColor;
-};
 
 void main() {
-    // Hardcoded lighting parameters wrapped in LightInfo struct
-    LightInfo light = LightInfo(
-        vec3(0.0, 4.0, 4.0),   // lightPosition
-        vec3(0.0, 2.0, 5.0),   // viewPosition (camera position)
-        vec3(0.2, 0.2, 0.2),   // ambientColor
-        vec3(0.8, 0.8, 0.8),   // diffuseColor
-        vec3(1.0, 1.0, 1.0)    // specularColor
-    );
-
-
     Material mat = materials[fragMaterialIndex];
 
-    // Normalize vectors
     vec3 norm = normalize(fragNormal);
-    vec3 lightDir = normalize(light.lightPosition - fragPosition);
-    vec3 viewDir = normalize(light.viewPosition - fragPosition);
+    vec3 lightDir = normalize(ubo.lightPos.xyz - fragPosition);
+    vec3 viewDir = normalize(ubo.viewPos .xyz - fragPosition);
 
-    // Ambient lighting
-    vec3 ambient = mat.ambient.rgb * light.ambientColor;
+    // simple white point light (scale as you like)
+    vec3 lightAmbient = vec3(0.2);
+    vec3 lightDiffuse = vec3(0.8);
+    vec3 lightSpecular = vec3(1.0);
 
-    // Diffuse lighting
+    // Ambient
+    vec3 ambient  = mat.ambient .rgb * lightAmbient;
+
+    // Diffuse
     float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = mat.diffuse.rgb * diff * light.diffuseColor;
+    vec3 diffuse = mat.diffuse.rgb * diff * lightDiffuse;
 
-    // Specular lighting
+    // Specular
     vec3 reflectDir = reflect(-lightDir, norm);
     float specFactor = pow(max(dot(viewDir, reflectDir), 0.0), mat.shininess);
-    vec3 specular = mat.specular.rgb * specFactor * light.specularColor;
+    vec3 specular = mat.specular.rgb * specFactor * lightSpecular;
 
-    // Final combined color
-    vec3 finalColor = ambient + diffuse + specular;
-
-    outColor = vec4(finalColor, mat.diffuse.a);
+    outColor = vec4(ambient + diffuse + specular, mat.diffuse.a);
 }

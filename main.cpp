@@ -96,6 +96,9 @@ struct alignas(16) Material {
     alignas(16) glm::vec3 padding;  // for std140 alignment
 };
 
+int lightMaterialIndex = -1;
+glm::vec3 lightWorldPos = {};
+
 struct Vertex {
     glm::vec3 pos;
     glm::vec3 normal;
@@ -163,6 +166,8 @@ struct UniformBufferObject {
     alignas(16) glm::mat4 model;
     alignas(16) glm::mat4 view;
     alignas(16) glm::mat4 proj;
+    alignas(16) glm::vec4 lightPos;
+    alignas(16) glm::vec4 viewPos;
 };
 
 class HelloTriangleApplication {
@@ -714,7 +719,8 @@ class HelloTriangleApplication {
         uboLayoutBinding.descriptorCount = 1;
         uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         uboLayoutBinding.pImmutableSamplers = nullptr;
-        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                               VK_SHADER_STAGE_FRAGMENT_BIT;
 
         VkDescriptorSetLayoutBinding samplerLayoutBinding{};
         samplerLayoutBinding.binding = 1;
@@ -1326,6 +1332,14 @@ class HelloTriangleApplication {
         indices.clear();
         vertices.clear();
 
+        for (size_t i = 0; i < objMaterials.size(); ++i) {
+            if (objMaterials[i].name == "light") {
+                lightMaterialIndex = static_cast<int>(i);
+                break;
+            }
+        }
+        std::vector<glm::vec3> lightVertices;
+
         for (size_t s = 0; s < shapes.size(); ++s) {
             size_t indexOffset = 0;
             for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); ++f) {
@@ -1371,10 +1385,19 @@ class HelloTriangleApplication {
                         vertices.push_back(vertex);
                     }
 
+                    if (materialIndex == lightMaterialIndex) {
+                        lightVertices.push_back(vertex.pos);
+                    }
+
                     indices.push_back(uniqueVertices[vertex]);
                 }
                 indexOffset += fv;
             }
+        }
+
+        if (!lightVertices.empty()) {
+            for (auto& v : lightVertices) lightWorldPos += v;
+            lightWorldPos /= static_cast<float>(lightVertices.size());  // centroid
         }
     }
 
@@ -1786,6 +1809,8 @@ class HelloTriangleApplication {
         // ubo.model = glm::rotate(glm::mat4(1.0f), time / 2 *
         // glm::radians(90.0f),
         //                         glm::vec3(0.0f, 0.0f, 1.0f));
+
+        ubo.lightPos = glm::vec4(lightWorldPos, 1.0f); ubo.viewPos = glm::vec4(0.0f, 0.8f, 3.0f, 1.0f);
 
         ubo.model = glm::mat4(1.0f);
         // ubo.view =
