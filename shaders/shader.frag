@@ -1,31 +1,23 @@
-#version 450
+#version 460
+
+layout(binding = 1) uniform sampler2D texSampler;
 
 struct Material {
     vec4 ambient;
     vec4 diffuse;
     vec4 specular;
     float shininess;
-    vec3 padding; // Padding to satisfy std140
+    vec3  padding;      // keep for alignment
 };
 
-layout(binding = 1) uniform sampler2D texSampler;
-
-layout(std140, binding = 2) uniform MaterialBlock {
-    Material materials[9];
+layout(std430, binding = 2) readonly buffer MaterialBlock {
+    Material materials[];
 };
 
-// layout(binding = 3) uniform LightInfo {
-//     vec3 lightPosition;
-//     vec3 viewPosition;
-//     vec3 ambientColor;
-//     vec3 diffuseColor;
-//     vec3 specularColor;
-// } light;
-
-layout(location = 0) in vec3 fragPosition;
-layout(location = 1) in vec3 fragNormal;
-layout(location = 2) in vec2 fragTexCoord;
-layout(location = 3) flat in int fragMaterialIndex;
+layout(location = 0) in  vec3 fragPosition;
+layout(location = 1) in  vec3 fragNormal;
+layout(location = 2) in  vec2 fragTexCoord;
+layout(location = 3) flat in int  fragMaterialIndex;
 
 layout(location = 0) out vec4 outColor;
 
@@ -69,11 +61,6 @@ void main() {
 
     // Final combined color
     vec3 finalColor = ambient + diffuse + specular;
-
-    // Sample texture and combine with material colors
-    // vec4 texColor = texture(texSampler, fragTexCoord);
-    // finalColor *= texColor.rgb;
-    // outColor = vec4(finalColor, texColor.a * mat.diffuse.a);
 
     outColor = vec4(finalColor, mat.diffuse.a);
 }

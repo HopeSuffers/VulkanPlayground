@@ -33,7 +33,7 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-const std::string MODEL_PATH = "models/CornellBox-Water.obj";
+const std::string MODEL_PATH = "models/CornellBox-Mirror.obj";
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
@@ -216,7 +216,7 @@ class HelloTriangleApplication {
     VkImageView textureImageView;
     VkSampler textureSampler;
 
-    Material materials[9] = {};
+    std::vector<Material> materials;
 
     std::vector<tinyobj::material_t> objMaterials;
     std::vector<Vertex> vertices;
@@ -286,7 +286,6 @@ class HelloTriangleApplication {
         createVertexBuffer();
         createIndexBuffer();
         createUniformBuffers();
-        createMaterialsBuffers();
         createDescriptorPool();
         createDescriptorSets();
         createCommandBuffers();
@@ -329,7 +328,12 @@ class HelloTriangleApplication {
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
         vkDestroyRenderPass(device, renderPass, nullptr);
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+            vkUnmapMemory(device, materialsBuffersMemory[i]);   // optional
+            vkDestroyBuffer(device, materialsBuffers[i], nullptr);
+            vkFreeMemory (device, materialsBuffersMemory[i], nullptr);
+
+            vkUnmapMemory(device, uniformBuffersMemory[i]);     // optional
             vkDestroyBuffer(device, uniformBuffers[i], nullptr);
             vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
         }
@@ -723,8 +727,7 @@ class HelloTriangleApplication {
         VkDescriptorSetLayoutBinding materialsLayoutBinding{};
         materialsLayoutBinding.binding = 2;
         materialsLayoutBinding.descriptorCount = 1;
-        materialsLayoutBinding.descriptorType =
-            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        materialsLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         materialsLayoutBinding.pImmutableSamplers = nullptr;
         materialsLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
@@ -1323,29 +1326,42 @@ class HelloTriangleApplication {
         indices.clear();
         vertices.clear();
 
-        for (size_t s = 0; s < shapes.size(); s++) {
+        for (size_t s = 0; s < shapes.size(); ++s) {
             size_t indexOffset = 0;
-            for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size();
-                 f++) {
-                int fv = shapes[s].mesh.num_face_vertices[f];
+            for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); ++f) {
+                int fv            = shapes[s].mesh.num_face_vertices[f];
                 int materialIndex = shapes[s].mesh.material_ids[f];
+                materialIndex     = std::max(materialIndex, 0);   // default 0
 
-                for (size_t v = 0; v < fv; v++) {
-                    tinyobj::index_t idx =
-                        shapes[s].mesh.indices[indexOffset + v];
+                for (size_t v = 0; v < fv; ++v) {
+                    tinyobj::index_t idx = shapes[s].mesh.indices[indexOffset + v];
                     Vertex vertex{};
 
-                    vertex.pos = {attrib.vertices[3 * idx.vertex_index + 0],
-                                  attrib.vertices[3 * idx.vertex_index + 1],
-                                  attrib.vertices[3 * idx.vertex_index + 2]};
+                    // Positions are always present
+                    vertex.pos = {
+                        attrib.vertices[3 * idx.vertex_index + 0],
+                        attrib.vertices[3 * idx.vertex_index + 1],
+                        attrib.vertices[3 * idx.vertex_index + 2]};
 
-                    vertex.normal = {attrib.normals[3 * idx.normal_index + 0],
-                                     attrib.normals[3 * idx.normal_index + 1],
-                                     attrib.normals[3 * idx.normal_index + 2]};
+                    // Normals may be missing
+                    if (idx.normal_index >= 0) {
+                        vertex.normal = {
+                            attrib.normals[3 * idx.normal_index + 0],
+                            attrib.normals[3 * idx.normal_index + 1],
+                            attrib.normals[3 * idx.normal_index + 2]};
+                    } else {
+                        vertex.normal = {0.0f, 1.0f, 0.0f};          // fallback
+                    }
 
-                    vertex.texCoord = {
-                        attrib.texcoords[2 * idx.texcoord_index + 0],
-                        1.0f - attrib.texcoords[2 * idx.texcoord_index + 1]};
+                    // Tex‑coords may be missing
+                    if (idx.texcoord_index >= 0) {
+                        vertex.texCoord = {
+                            attrib.texcoords[2 * idx.texcoord_index + 0],
+                            1.0f -
+                            attrib.texcoords[2 * idx.texcoord_index + 1]};
+                    } else {
+                        vertex.texCoord = {0.0f, 0.0f};              // fallback
+                    }
 
                     vertex.materialIndex = materialIndex;
 
@@ -1435,43 +1451,40 @@ class HelloTriangleApplication {
     }
 
     void createMaterials() {
-        for (size_t i = 0; i < objMaterials.size() && i < 9; i++) {
-            Material material{};
-
-            material.ambient = glm::vec4(objMaterials[i].ambient[0],
-                                         objMaterials[i].ambient[1],
-                                         objMaterials[i].ambient[2], 1.0f);
-
-            material.diffuse = glm::vec4(objMaterials[i].diffuse[0],
-                                         objMaterials[i].diffuse[1],
-                                         objMaterials[i].diffuse[2], 1.0f);
-
-            material.specular = glm::vec4(objMaterials[i].specular[0],
-                                          objMaterials[i].specular[1],
-                                          objMaterials[i].specular[2], 1.0f);
-
-            material.shininess = objMaterials[i].shininess;
-
-            materials[i] = material;
+        if (objMaterials.empty()) {
+            objMaterials.push_back(tinyobj::material_t{}); // zero‑initialised
         }
-    }
 
-    void createMaterialsBuffers() {
-        VkDeviceSize bufferSize = sizeof(materials);
+        materials.resize(objMaterials.size());
+        for (size_t i = 0; i < objMaterials.size(); ++i) {
+            materials[i].ambient  = { objMaterials[i].ambient [0],
+                                      objMaterials[i].ambient [1],
+                                      objMaterials[i].ambient [2], 1.0f };
+            materials[i].diffuse  = { objMaterials[i].diffuse [0],
+                                      objMaterials[i].diffuse [1],
+                                      objMaterials[i].diffuse [2], 1.0f };
+            materials[i].specular = { objMaterials[i].specular[0],
+                                      objMaterials[i].specular[1],
+                                      objMaterials[i].specular[2], 1.0f };
+            materials[i].shininess = objMaterials[i].shininess;
+        }
+
+        VkDeviceSize bufferSize = sizeof(Material) * materials.size();
 
         materialsBuffers.resize(MAX_FRAMES_IN_FLIGHT);
         materialsBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
         materialsBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
 
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            createBuffer(bufferSize,
+                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                         VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                          materialsBuffers[i], materialsBuffersMemory[i]);
 
             vkMapMemory(device, materialsBuffersMemory[i], 0, bufferSize, 0,
                         &materialsBuffersMapped[i]);
-            memcpy(materialsBuffersMapped[i], materials, sizeof(materials));
+            memcpy(materialsBuffersMapped[i], materials.data(), bufferSize);
         }
     }
 
@@ -1483,7 +1496,7 @@ class HelloTriangleApplication {
         poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         poolSizes[1].descriptorCount =
             static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-        poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         poolSizes[2].descriptorCount =
             static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
@@ -1529,7 +1542,7 @@ class HelloTriangleApplication {
             VkDescriptorBufferInfo materialBufferInfo{};
             materialBufferInfo.buffer = materialsBuffers[i];
             materialBufferInfo.offset = 0;
-            materialBufferInfo.range = sizeof(materials);
+            materialBufferInfo.range  = VK_WHOLE_SIZE;
 
             std::array<VkWriteDescriptorSet, 3> descriptorWrites{};
 
@@ -1555,8 +1568,7 @@ class HelloTriangleApplication {
             descriptorWrites[2].dstSet = descriptorSets[i];
             descriptorWrites[2].dstBinding = 2;
             descriptorWrites[2].dstArrayElement = 0;
-            descriptorWrites[2].descriptorType =
-                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             descriptorWrites[2].descriptorCount = 1;
             descriptorWrites[2].pBufferInfo = &materialBufferInfo;
 
