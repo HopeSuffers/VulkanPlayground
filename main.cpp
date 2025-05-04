@@ -89,12 +89,15 @@ struct SwapChainSupportDetails {
 };
 
 struct alignas(16) Material {
-    glm::vec4 ambient;
-    glm::vec4 diffuse;
-    glm::vec4 specular;
-    float shininess;
-    alignas(16) glm::vec3 padding;  // for std140 alignment
+    glm::vec4 Ka;
+    glm::vec4 Kd;
+    glm::vec4 Ks;
+    glm::vec4 Ke;
+    glm::vec4 Tf_Ni;   // xyz = Tf, w = Ni
+    glm::vec4 params;  // x=Ns, y=d, z=illum, w=pad
 };
+static_assert(sizeof(Material) == 6 * sizeof(glm::vec4),
+              "Material layout mismatch");
 
 int lightMaterialIndex = -1;
 glm::vec3 lightWorldPos = {};
@@ -1480,16 +1483,21 @@ class HelloTriangleApplication {
 
         materials.resize(objMaterials.size());
         for (size_t i = 0; i < objMaterials.size(); ++i) {
-            materials[i].ambient  = { objMaterials[i].ambient [0],
-                                      objMaterials[i].ambient [1],
-                                      objMaterials[i].ambient [2], 1.0f };
-            materials[i].diffuse  = { objMaterials[i].diffuse [0],
-                                      objMaterials[i].diffuse [1],
-                                      objMaterials[i].diffuse [2], 1.0f };
-            materials[i].specular = { objMaterials[i].specular[0],
-                                      objMaterials[i].specular[1],
-                                      objMaterials[i].specular[2], 1.0f };
-            materials[i].shininess = objMaterials[i].shininess;
+            const auto& m = objMaterials[i];
+            materials[i].Ka = glm::vec4(m.ambient  [0], m.ambient  [1], m.ambient  [2], 1.0f);
+            materials[i].Kd = glm::vec4(m.diffuse  [0], m.diffuse  [1], m.diffuse  [2], 1.0f);
+            materials[i].Ks = glm::vec4(m.specular [0], m.specular [1], m.specular [2], 1.0f);
+            materials[i].Ke = glm::vec4(m.emission [0], m.emission [1], m.emission [2], 1.0f);
+
+            materials[i].Tf_Ni  = glm::vec4(m.transmittance[0],
+                                            m.transmittance[1],
+                                            m.transmittance[2],
+                                            m.ior);
+
+            materials[i].params = glm::vec4(m.shininess,
+                                            m.dissolve,
+                                            static_cast<float>(m.illum),
+                                            0.0f);
         }
 
         VkDeviceSize bufferSize = sizeof(Material) * materials.size();

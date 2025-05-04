@@ -11,11 +11,12 @@ layout(binding = 0) uniform UniformBufferObject {
 layout(binding = 1) uniform sampler2D texSampler;
 
 struct Material {
-    vec4 ambient;
-    vec4 diffuse;
-    vec4 specular;
-    float shininess;
-    vec3  padding;      // keep for alignment
+    vec4 Ka;        // ambient                (Ka.rgba)
+    vec4 Kd;        // diffuse                (Kd.rgba)
+    vec4 Ks;        // specular               (Ks.rgba)
+    vec4 Ke;        // emissive               (Ke.rgba)
+    vec4 Tf_Ni;     // xyz = transmittance Tf, w = Ni (IOR)
+    vec4 params;    // x = Ns (shininess)
 };
 
 layout(std430, binding = 2) readonly buffer MaterialBlock {
@@ -43,16 +44,22 @@ void main() {
     vec3 lightSpecular = vec3(1.0);
 
     // Ambient
-    vec3 ambient  = mat.ambient .rgb * lightAmbient;
+    vec3 ambient = mat.Ka.rgb * lightAmbient;
 
     // Diffuse
     float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = mat.diffuse.rgb * diff * lightDiffuse;
+    vec3 diffuse = mat.Kd.rgb * diff * lightDiffuse;
 
     // Specular
     vec3 reflectDir = reflect(-lightDir, norm);
-    float specFactor = pow(max(dot(viewDir, reflectDir), 0.0), mat.shininess);
-    vec3 specular = mat.specular.rgb * specFactor * lightSpecular;
+    float specFactor = pow(max(dot(viewDir, reflectDir), 0.0), mat.params.x);
+    vec3 specular = mat.Ks.rgb * specFactor * lightSpecular;
 
-    outColor = vec4(ambient + diffuse + specular, mat.diffuse.a);
+    vec3 emissive = mat.Ke.rgb;
+    float alpha = mat.params.y;
+    float illum = mat.params.z;
+
+    vec3 final = ambient + diffuse + specular + emissive;
+
+    outColor = vec4(final, alpha);
 }
